@@ -39,6 +39,8 @@ private:
     int get_http_socket(char* port);
     int prepare_acceptance_phase(int max_client);
     void server_loop();
+    static void send(int client_socket, string http_header, string http_response);
+    static void send(int client_socket, string http_header, char file_buffer[], int buffer_length);
 public:
     Server_Class(char *port, int max_client);
     void build_and_run_server();

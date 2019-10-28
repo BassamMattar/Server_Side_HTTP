@@ -69,6 +69,7 @@ int Server_Class::prepare_acceptance_phase(int max_clients) {
     FD_SET(this->server_socket, &server_set);//add server socket to be used among clients to handle(accept) incoming requests
     return  0;
 }
+
 void Server_Class::server_loop() {
     struct sockaddr_storage client_addr;//incoming client information
     socklen_t addr_len;
@@ -141,7 +142,7 @@ void Server_Class::handle_client(int client_socket, int in_active_duration_milli
         }
         if(FD_ISSET(client_socket, &write_filtered_set) && buf[0] != NULL) {
             string request(buf);
-            if(request.find("GET")!=request.npos) {
+            if(request.find("GET")!= request.npos) {
                 printf("Socket %d handles GET request.\n", client_socket);
                 printf("reset timer for socket %d\n", client_socket);
                 timer =  chrono::steady_clock::now() + chrono::milliseconds(in_active_duration_milli);//reset timer
@@ -158,6 +159,7 @@ void Server_Class::handle_client(int client_socket, int in_active_duration_milli
                                     "Content-length: "+to_string(response.length()) +"\r\n"
                                     "Connection: Keep-Alive\r\n"
                                     "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+                    send(client_socket, http_header, response);
                 } else if(path.find(".html") != path.npos) {
                     path = "." + path;
                     ifstream f(path.c_str());
@@ -174,29 +176,16 @@ void Server_Class::handle_client(int client_socket, int in_active_duration_milli
                                         "Connection: Keep-Alive\r\n"
                                         "Content-Type: text/html; charset=UTF-8\r\n\r\n";
                     }
-                    response = http_header + response;
-                    char response_chars[response.size() + 1];
-                    strcpy(response_chars, response.c_str());
-                    int total_len = sizeof response_chars;
-
-                    if (sendall(client_socket, response_chars, &total_len) != 0) {//check if there error or connection end
-                        perror("send");
-                    } else {//actual data is sent
-                        //debug data
-                        printf("response is sent successfully\n");
-
-                    }
+                    send(client_socket, http_header, response);
                 } else {
                     path = "." + path;
                     fstream http_file(path);//get file binary data
                     http_file.seekg(0, std::fstream::end);
-                    size_t length = http_file.tellg();//get length of file
+                    size_t file_buffer_length = http_file.tellg();//get length of file
                     http_file.seekg(0, std::fstream::beg);
-
-                    char buffer[length + 1];//make buffer of length of file
-                    http_file.read(buffer, length);//put binary data in buffer
+                    char file_buffer[file_buffer_length + 1];//make buffer of length of file
+                    http_file.read(file_buffer, file_buffer_length);//put binary data in buffer
                     string http_header;
-                    string response = convertToString(buffer, length);
                     if(!http_file.good()) {//not existed
                         http_header = "HTTP/1.1 404 Not Found\r\n"
                                       "Content-length: 0\r\n"
@@ -205,35 +194,17 @@ void Server_Class::handle_client(int client_socket, int in_active_duration_milli
                     } else {
                         http_header =   "HTTP/1.1 200 OK\r\n"
                                         "Content-Type: application/octet\r\n"
-                                        "Content-Length: " + to_string(response.length()) + "\r\n"
+                                        "Content-Length: " + to_string(sizeof file_buffer) + "\r\n"
                                                                                             "\r\n";
                     }
                     //debug
-                    cout << "BUFFER LENGTH: " << to_string(sizeof buffer) << endl;
-                    cout << "RESPONSE LENGTH: " << to_string(response.size()) << endl;
+                    cout << "BUFFER LENGTH: " << to_string(sizeof file_buffer) << endl;
+                    cout << "RESPONSE LENGTH: " << to_string(sizeof file_buffer) << endl;
                     cout << http_header << endl;
-                    int len = sizeof(buffer);
-                    char a[http_header.length() + 1];
-                    strcpy(a, http_header.c_str());
-                    int l = http_header.length();
-                    http_header =   "HTTP/1.1 200 Ok\r\n"
-                                    "Content-length: 0\r\n"
-                                    "Content-Type: application/octet\r\n\r\n";
-                    if (sendall(client_socket, a, &l) != 0) {//check if there error or connection end
-                        perror("send");
-                    } else {//actual data is sent
-                        //debug data
-                        printf("response is sent successfully\n");
-
-                    }
-                    if (sendall(client_socket, buffer, &len) != 0) {//check if there error or connection end
-                        perror("send");
-                    } else {//actual data is sent
-                        //debug data
-                        printf("response is sent successfully\n");
-
-                    }
+                    send(client_socket, http_header, file_buffer, sizeof file_buffer);
                 }
+            } else if(request.find("POST")!= request.npos) {
+
             }
             //TODO handle post request
             buf[0] = NULL;
@@ -251,4 +222,47 @@ void Server_Class::build_and_run_server() {
     get_http_socket(this->server_port);
     prepare_acceptance_phase(this->server_max_client);
     server_loop();
+}
+
+void Server_Class::send(int client_socket, string http_header, string http_response) {
+    char header_chars[http_header.length() + 1];
+    char response_chars[http_response.size() + 1];
+    strcpy(header_chars, http_header.c_str());
+    strcpy(response_chars, http_response.c_str());
+    int header_char_length = http_header.length();
+    int response_char_length = http_response.length();
+    if (sendall(client_socket, header_chars, &header_char_length) != 0) {//check if there error or connection end
+        perror("send");
+    } else {//actual data is sent
+        //debug data
+        printf("response is sent successfully\n");
+    }
+
+    if (sendall(client_socket, response_chars, &response_char_length) != 0) {//check if there error or connection end
+        perror("send");
+    } else {//actual data is sent
+        //debug data
+        printf("response is sent successfully\n");
+    }
+}
+
+void Server_Class::send(int client_socket, string http_header, char file_buffer[], int buffer_length) {
+    char header_chars[http_header.length() + 1];
+    strcpy(header_chars, http_header.c_str());
+    int header_char_length = http_header.length();
+
+    if (sendall(client_socket, header_chars, &header_char_length) != 0) {//check if there error or connection end
+        perror("send");
+    } else {//actual data is sent
+        //debug data
+        printf("response is sent successfully\n");
+    }
+
+    if (sendall(client_socket, file_buffer, &buffer_length) != 0) {//check if there error or connection end
+        perror("send");
+    } else {//actual data is sent
+        //debug data
+        printf("response is sent successfully\n");
+
+    }
 }
