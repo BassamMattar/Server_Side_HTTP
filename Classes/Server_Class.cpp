@@ -174,33 +174,65 @@ void Server_Class::handle_client(int client_socket, int in_active_duration_milli
                                         "Connection: Keep-Alive\r\n"
                                         "Content-Type: text/html; charset=UTF-8\r\n\r\n";
                     }
-                } else if(path.find(".jpeg") != path.npos) {
+                    response = http_header + response;
+                    char response_chars[response.size() + 1];
+                    strcpy(response_chars, response.c_str());
+                    int total_len = sizeof response_chars;
+
+                    if (sendall(client_socket, response_chars, &total_len) != 0) {//check if there error or connection end
+                        perror("send");
+                    } else {//actual data is sent
+                        //debug data
+                        printf("response is sent successfully\n");
+
+                    }
+                } else {
                     path = "." + path;
+                    fstream http_file(path);//get file binary data
+                    http_file.seekg(0, std::fstream::end);
+                    size_t length = http_file.tellg();//get length of file
+                    http_file.seekg(0, std::fstream::beg);
+
+                    char buffer[length + 1];//make buffer of length of file
+                    http_file.read(buffer, length);//put binary data in buffer
+                    string http_header;
+                    string response = convertToString(buffer, length);
+                    if(!http_file.good()) {//not existed
+                        http_header = "HTTP/1.1 404 Not Found\r\n"
+                                      "Content-length: 0\r\n"
+                                      "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+
+                    } else {
+                        http_header =   "HTTP/1.1 200 OK\r\n"
+                                        "Content-Type: application/octet\r\n"
+                                        "Content-Length: " + to_string(response.length()) + "\r\n"
+                                                                                            "\r\n";
+                    }
+                    //debug
+                    cout << "BUFFER LENGTH: " << to_string(sizeof buffer) << endl;
+                    cout << "RESPONSE LENGTH: " << to_string(response.size()) << endl;
+                    cout << http_header << endl;
+                    int len = sizeof(buffer);
+                    char a[http_header.length() + 1];
+                    strcpy(a, http_header.c_str());
+                    int l = http_header.length();
                     http_header =   "HTTP/1.1 200 Ok\r\n"
                                     "Content-length: 0\r\n"
-                                    "Content-Type: image/jpeg\r\n\r\n";
-                    char response_http[http_header.size() + 1];
-                    strcpy(response_http, http_header.c_str());
-                    write(client_socket, response_http, sizeof(response_http) - 1);
-                    int fdimg = open(path.c_str(), O_RDONLY);
-                    int sent = sendfile(client_socket, fdimg, NULL, 11874);//TODO check file size
-                    printf("sent: %d\n", sent);
-                    close(fdimg);
-                    buf[0] = NULL;
-                    continue;
-                }
-                //TODO handle different types html and images
-                response = http_header + response;
-                char response_chars[response.size() + 1];
-                strcpy(response_chars, response.c_str());
-                int total_len = sizeof response_chars;
+                                    "Content-Type: application/octet\r\n\r\n";
+                    if (sendall(client_socket, a, &l) != 0) {//check if there error or connection end
+                        perror("send");
+                    } else {//actual data is sent
+                        //debug data
+                        printf("response is sent successfully\n");
 
-                if (sendall(client_socket, response_chars, &total_len) != 0) {//check if there error or connection end
-                    perror("send");
-                } else {//actual data is sent
-                    //debug data
-                    printf("response is sent successfully\n");
+                    }
+                    if (sendall(client_socket, buffer, &len) != 0) {//check if there error or connection end
+                        perror("send");
+                    } else {//actual data is sent
+                        //debug data
+                        printf("response is sent successfully\n");
 
+                    }
                 }
             }
             //TODO handle post request

@@ -5,6 +5,10 @@
 #ifndef SERVER_SIDE_HTTP_UTILS_H
 #define SERVER_SIDE_HTTP_UTILS_H
 #include <netinet/in.h>
+#include <string.h>
+#include <string>
+
+using  namespace std;
 // get sockaddr, IPv4 or IPv6 -> provide portability
 inline void *get_in_addr(struct sockaddr *sa)
 {
@@ -30,5 +34,14 @@ inline int sendall(int s, char *buf, int *len)
     }
     *len = total; // return number actually sent here
     return n==-1?-1:0; // return -1 on failure, 0 on success
+}
+inline string convertToString(char* a, int size)
+{
+    int i;
+    string s = "";
+    for (i = 0; i < size; i++) {
+        s = s + a[i];
+    }
+    return s;
 }
 #endif //SERVER_SIDE_HTTP_UTILS_H
