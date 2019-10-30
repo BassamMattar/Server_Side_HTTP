@@ -44,4 +44,16 @@ inline string convertToString(char* a, int size)
     }
     return s;
 }
+
+inline int get_number_occurances(string str, string substr) {
+    int count = 0;
+    int nPos = str.find(substr, 0);
+    while (nPos != string::npos)
+    {
+        count++;
+        nPos = str.find(substr, nPos + 1);
+    }
+    return count;
+}
+
 #endif //SERVER_SIDE_HTTP_UTILS_H

@@ -96,7 +96,7 @@ void Server_Class::server_loop() {
                     printf("Server: Server accept new connection from %s on socket %d\n",
                            inet_ntop(client_addr.ss_family, get_in_addr((struct sockaddr*)&client_addr), client_IP, INET6_ADDRSTRLEN), new_server_to_client_socket);
                     current_clients++;
-                    int time_out = 100000;//TODO determine it
+                    int time_out = 100000/current_clients;
                     thread(Server_Class::handle_client, new_server_to_client_socket, time_out).detach();
 
                 }
@@ -199,14 +199,52 @@ void Server_Class::handle_client(int client_socket, int in_active_duration_milli
                     }
                     //debug
                     cout << "BUFFER LENGTH: " << to_string(sizeof file_buffer) << endl;
-                    cout << "RESPONSE LENGTH: " << to_string(sizeof file_buffer) << endl;
                     cout << http_header << endl;
                     send(client_socket, http_header, file_buffer, sizeof file_buffer);
                 }
             } else if(request.find("POST")!= request.npos) {
-
+                printf("Socket %d handles POST request.\n", client_socket);
+                printf("reset timer for socket %d\n", client_socket);
+                timer =  chrono::steady_clock::now() + chrono::milliseconds(in_active_duration_milli);//reset timer
+                printf("begin recieving data\n");
+                int get_pos = request.find("POST");
+                int http_pos = request.find("HTTP/1.1");
+                int content_length_pos = request.find("Content-Length: ") + strlen("Content-Length: ");
+                int number_length = request.substr(content_length_pos, request.length() - content_length_pos).find("\r\n");
+                string path = "." + request.substr(get_pos + strlen("POST "), http_pos - get_pos - strlen("POST ") - 1);
+                string content_length_string = request.substr(content_length_pos, number_length);
+                int content_length_value = stoi(content_length_string);
+                int number_requests = get_number_occurances(request, "\r\n\r\n");
+                int return_pos = request.find("\r\n\r\n") + strlen("\r\n\r\n");
+                string data = request.substr(return_pos, request.length());
+                while(data.length() < content_length_value) {
+                    char post_data_buffer[content_length_value - data.length() + 1];
+                    if ((nbytes = recv(client_socket, post_data_buffer, sizeof post_data_buffer, 0)) <= 0) {//check if there error or connection end
+                        // got error or connection closed by client
+                        if (nbytes == 0) {
+                            // connection closed
+                            printf("Server: socket %d hung up\n", client_socket);
+                        } else {
+                            perror("recv");
+                        }
+                        break;
+                    } else {
+                        printf("reset timer for socket %d\n", client_socket);
+                        timer =  chrono::steady_clock::now() + chrono::milliseconds(in_active_duration_milli);//reset timer
+                        printf("Socket %d: request sent\n", client_socket);
+                        printf("Socket %d: %s\n", client_socket, buf);
+                    }
+                    data = data + convertToString(post_data_buffer, nbytes);
+                }
+                printf("Client requested path %s\n", path.c_str());
+                string http_header = "HTTP/1.1 200 OK\r\n"
+                                     "Content-Length: 0\r\n"
+                                     "\r\n";
+                ofstream f(path.c_str());
+                f << data;
+                f.close();
+                send(client_socket, http_header);
             }
-            //TODO handle post request
             buf[0] = NULL;
         }
     }
@@ -264,5 +302,18 @@ void Server_Class::send(int client_socket, string http_header, char file_buffer[
         //debug data
         printf("response is sent successfully\n");
 
+    }
+}
+
+void Server_Class::send(int client_socket, string http_header) {
+    char header_chars[http_header.length() + 1];
+    strcpy(header_chars, http_header.c_str());
+    int header_char_length = http_header.length();
+
+    if (sendall(client_socket, header_chars, &header_char_length) != 0) {//check if there error or connection end
+        perror("send");
+    } else {//actual data is sent
+        //debug data
+        printf("response is sent successfully\n");
     }
 }
